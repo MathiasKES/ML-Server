@@ -1,0 +1,148 @@
+{% extends "html/base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block page_title %}{{ name }}{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:24px;margin-bottom:28px">
+  <div>
+    <div class="sec">Run Configuration</div>
+    <table class="meta-table">
+      <tr><td>Run ID</td>       <td>{{ meta.run_id }}</td></tr>
+      <tr><td>Name</td>         <td>{{ meta.name }}</td></tr>
+      <tr><td>Dataset</td>      <td>{{ meta.dataset }}</td></tr>
+      <tr><td>Methods</td>      <td>{{ meta.methods|join(', ') }}</td></tr>
+      <tr><td>Num dummy</td>    <td>{{ meta.num_dummy }}</td></tr>
+      <tr><td>Iterations</td>   <td>{{ meta.iterations }}</td></tr>
+      <tr><td>Learning rate</td><td>{{ meta.lr }}</td></tr>
+      <tr><td>Num classes</td>  <td>{{ meta.num_classes }}</td></tr>
+      <tr><td>GT label</td>     <td>{{ meta.gt_label }}</td></tr>
+      <tr><td>Label (iDLG)</td> <td>{{ meta.label_iDLG }}</td></tr>
+      <tr><td>Label (DLG)</td>  <td>{{ meta.label_DLG }}</td></tr>
+      <tr><td>Created</td>      <td>{{ created_fmt }}</td></tr>
+    </table>
+  </div>
+  <div>
+    <div class="sec">Final Metrics</div>
+    <div class="card"><div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><div class="stat-label">DLG loss</div>
+          <div class="stat-value" style="font-size:16px;color:var(--dlg)">{{ meta.final_loss_DLG or '&#x2014;' }}</div></div>
+        <div><div class="stat-label">iDLG loss</div>
+          <div class="stat-value" style="font-size:16px;color:var(--idlg)">{{ meta.final_loss_iDLG or '&#x2014;' }}</div></div>
+        <div><div class="stat-label">DLG MSE</div>
+          <div class="stat-value" style="font-size:16px;color:var(--dlg)">{{ meta.final_mse_DLG or '&#x2014;' }}</div></div>
+        <div><div class="stat-label">iDLG MSE</div>
+          <div class="stat-value" style="font-size:16px;color:var(--idlg)">{{ meta.final_mse_iDLG or '&#x2014;' }}</div></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="sec">Metrics</div>
+{% if has_metrics %}
+<div class="metrics-grid">
+  <div class="card"><div class="card-header">Gradient Loss</div>
+    <div class="card-body"><canvas id="lossChart"></canvas></div></div>
+  <div class="card"><div class="card-header">MSE vs Ground Truth</div>
+    <div class="card-body"><canvas id="mseChart"></canvas></div></div>
+</div>
+{% else %}
+<div class="empty" style="padding:32px">
+  <div class="empty-icon">&#x1F4C8;</div><p>No metrics uploaded yet.</p>
+</div>
+{% endif %}
+
+<div class="tabs">
+  <button class="tab-btn active" data-tg="d" data-t="imgs"
+    onclick="switchTab('d','imgs')">Images ({{ images|length }})</button>
+  <button class="tab-btn" data-tg="d" data-t="data"
+    onclick="switchTab('d','data')">Data Files ({{ data_files|length }})</button>
+  <button class="tab-btn" data-tg="d" data-t="logs"
+    onclick="switchTab('d','logs')">Logs ({{ log_files|length }})</button>
+</div>
+
+<div class="tab-panel active" data-pg="d" data-p="imgs">
+  {% if images %}
+  <div class="img-grid">
+    {% for img in images %}
+    <div class="img-item" onclick="openLb('/files/{{ run_id }}/images/{{ img.name }}')">
+      <img src="/files/{{ run_id }}/images/{{ img.name }}" loading="lazy" alt="{{ img.name }}">
+      <div class="img-label">{{ img.name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><div class="empty-icon">&#x1F5BC;</div><p>No images yet.</p></div>
+  {% endif %}
+</div>
+
+<div class="tab-panel" data-pg="d" data-p="data">
+  {% if data_files %}
+  <ul class="file-list">
+    {% for f in data_files %}
+    <li>
+      <span class="fname">{{ f.name }}</span>
+      <span style="display:flex;align-items:center;gap:12px">
+        <span class="fmeta">{{ f.size_str }}</span>
+        <a class="dl-btn" href="/files/{{ run_id }}/data/{{ f.name }}" download>&#x2193; download</a>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty"><div class="empty-icon">&#x1F4E6;</div><p>No data files yet.</p></div>
+  {% endif %}
+</div>
+
+<div class="tab-panel" data-pg="d" data-p="logs">
+  {% if log_content %}
+  <div class="log-viewer">{{ log_content }}</div>
+  {% else %}
+  <div class="empty"><div class="empty-icon">&#x1F4CB;</div><p>No logs yet.</p></div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const COPTS = {
+  responsive: true,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { labels: { color: '#6b7890', font: { family: 'Space Mono', size: 11 } } } },
+  scales: {
+    x: { grid: { color: '#1e2330' }, ticks: { color: '#3d4560', font: { family: 'Space Mono', size: 10 } } },
+    y: { grid: { color: '#1e2330' }, ticks: { color: '#3d4560', font: { family: 'Space Mono', size: 10 } } }
+  }
+};
+const dlgLoss  = {{ dlg_loss  | tojson }};
+const idlgLoss = {{ idlg_loss | tojson }};
+const dlgMse   = {{ dlg_mse   | tojson }};
+const idlgMse  = {{ idlg_mse  | tojson }};
+const mkL = a => a.map((_, i) => i);
+const mkDS = (label, data, color) => ({
+  label, data, borderColor: color,
+  backgroundColor: color.replace('rgb','rgba').replace(')',',0.08)'),
+  tension: 0.3, pointRadius: 2
+});
+if (dlgLoss.length || idlgLoss.length) {
+  const ds = [];
+  if (dlgLoss.length)  ds.push(mkDS('DLG',  dlgLoss,  'rgb(124,106,240)'));
+  if (idlgLoss.length) ds.push(mkDS('iDLG', idlgLoss, 'rgb(74,240,168)'));
+  new Chart(document.getElementById('lossChart'), {
+    type: 'line',
+    data: { labels: mkL(dlgLoss.length >= idlgLoss.length ? dlgLoss : idlgLoss), datasets: ds },
+    options: COPTS
+  });
+}
+if (dlgMse.length || idlgMse.length) {
+  const ds = [];
+  if (dlgMse.length)  ds.push(mkDS('DLG',  dlgMse,  'rgb(124,106,240)'));
+  if (idlgMse.length) ds.push(mkDS('iDLG', idlgMse, 'rgb(74,240,168)'));
+  new Chart(document.getElementById('mseChart'), {
+    type: 'line',
+    data: { labels: mkL(dlgMse.length >= idlgMse.length ? dlgMse : idlgMse), datasets: ds },
+    options: COPTS
+  });
+}
+</script>
+{% endblock %}

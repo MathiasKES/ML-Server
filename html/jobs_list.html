@@ -1,0 +1,57 @@
+{% extends "html/base.html" %}
+{% block title %}Experiments{% endblock %}
+{% block page_title %}Experiments{% endblock %}
+{% block content %}
+{% if runs %}
+<div class="card">
+  <div class="card-header">Experiments</div>
+  <table class="run-table">
+    <thead>
+      <tr>
+        <th>Name / ID</th>
+        <th>Dataset</th>
+        <th>Methods</th>
+        <th>Final Loss</th>
+        <th>Files</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in runs %}
+    <tr>
+      <td>
+        <a href="/jobs/{{ r.run_id }}">{{ r.name or r.run_id }}</a>
+        <br>
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">
+          {{ r.run_id }}
+        </span>
+      </td>
+      <td><span class="badge">{{ r.dataset }}</span></td>
+      <td>
+        {% for m in r.methods %}
+          <span class="mp mp-{{ m|lower }}">{{ m }}</span>
+        {% endfor %}
+      </td>
+      <td style="font-size:12px;font-family:var(--mono)">{{ r.loss_str }}</td>
+      <td style="font-size:12px;color:var(--text2)">
+        {{ r.image_count }} imgs &middot; {{ r.data_file_count }} files
+      </td>
+      <td style="font-size:12px;color:var(--text3);font-family:var(--mono)">
+        {{ r.created_fmt }}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body">
+    <div class="empty">
+      <div class="empty-icon">&#x2B21;</div>
+      <p>No experiments yet.</p>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

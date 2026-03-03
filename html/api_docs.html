@@ -1,0 +1,113 @@
+{% extends "html/base.html" %}
+{% block title %}API Docs{% endblock %}
+{% block page_title %}API Documentation{% endblock %}
+{% block content %}
+<div style="max-width:820px">
+
+<p style="color:var(--text2);font-size:14px;margin-bottom:28px;line-height:1.7">
+  All endpoints require auth via session cookie or a Bearer token from
+  <code style="font-family:var(--mono);color:var(--accent)">/api/token</code>.
+</p>
+
+<div class="sec">Authentication</div>
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/token</span>
+  <div class="ep-desc">Body: <code style="font-family:var(--mono)">{"username":"...","password":"..."}</code> &#x2192; bearer token.</div>
+</div></div>
+
+<div class="sec" style="margin-top:28px">Runs</div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs</span>
+  <div class="ep-desc">Create a run. Returns <code style="font-family:var(--mono)">run_id</code>.</div>
+  <div class="code-block">{"name":"cifar100-exp-01","dataset":"cifar100","methods":["DLG","iDLG"],
+ "num_dummy":1,"iterations":300,"lr":1.0,"num_classes":100}</div>
+</div></div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-get">GET</span><span class="ep-path">/api/runs</span>
+  <div class="ep-desc">List all runs.</div>
+</div></div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-get">GET</span><span class="ep-path">/api/runs/:run_id</span>
+  <div class="ep-desc">Get metadata for a single run.</div>
+</div></div>
+
+<div class="sec" style="margin-top:28px">Upload</div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/metrics</span>
+  <div class="ep-desc">Upload loss/MSE arrays or stream per-iteration values.</div>
+  <div class="code-block"># Full arrays at end of run
+{"method":"iDLG","loss":[0.5,0.3,...],"mse":[0.2,0.1,...],
+ "final_loss_iDLG":0.000042,"final_mse_iDLG":0.00012,"label_iDLG":7,"gt_label":7}
+# Stream per iteration
+{"method":"DLG","append_loss":0.3421,"append_mse":0.1204}</div>
+</div></div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/images</span>
+  <div class="ep-desc">Multipart upload (field: <code style="font-family:var(--mono)">file</code>) or base64 JSON. Accepts .png .jpg .gif .webp</div>
+</div></div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/data</span>
+  <div class="ep-desc">Multipart file upload. Accepts .pkl .npy .npz .json .csv .txt</div>
+</div></div>
+
+<div class="card" style="margin-bottom:12px"><div class="card-body">
+  <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/logs</span>
+  <div class="ep-desc">Append to log. Set <code style="font-family:var(--mono)">"append":false</code> to overwrite.</div>
+  <div class="code-block">{"filename":"run.log","content":"iter 50 loss=0.34","append":true}</div>
+</div></div>
+
+<div class="sec" style="margin-top:28px">Python Client</div>
+<div class="code-block">import requests, os
+
+SERVER = "http://localhost:5000"
+s = requests.Session()
+tok = s.post(f"{SERVER}/api/token",
+             json={"username":"admin","password":"changeme"}).json()["token"]
+s.headers["Authorization"] = f"Bearer {tok}"
+
+def create_run(name, dataset, methods, **kw):
+    return s.post(f"{SERVER}/api/runs",
+                  json={"name":name,"dataset":dataset,"methods":methods,**kw}).json()["run_id"]
+
+def upload_metrics(run_id, method, loss, mse, **kw):
+    s.post(f"{SERVER}/api/runs/{run_id}/metrics",
+           json={"method":method,"loss":loss,"mse":mse,**kw})
+
+def upload_image(run_id, path):
+    with open(path,"rb") as f:
+        s.post(f"{SERVER}/api/runs/{run_id}/images",
+               files={"file":(os.path.basename(path),f,"image/png")})
+
+def upload_data(run_id, path):
+    with open(path,"rb") as f:
+        s.post(f"{SERVER}/api/runs/{run_id}/data",
+               files={"file":(os.path.basename(path),f)})
+
+def log(run_id, msg):
+    s.post(f"{SERVER}/api/runs/{run_id}/logs",
+           json={"filename":"run.log","content":msg,"append":True})
+
+# Integration with iDLG.py:
+# run_id = create_run("cifar100-run-1","cifar100",["DLG","iDLG"],
+#                     num_dummy=1,iterations=300,lr=1.0,num_classes=100)
+# Inside iteration loop:
+#   log(run_id, f"{iters} {method} loss={current_loss:.8f}")
+#   s.post(f"{SERVER}/api/runs/{run_id}/metrics",
+#          json={"method":method,"append_loss":current_loss,"append_mse":mses[-1]})
+# After saving plot: upload_image(run_id, "path/to/plot.png")
+# End of run:
+#   upload_metrics(run_id,"DLG",loss_DLG,mse_DLG,
+#     final_loss_DLG=loss_DLG[-1],final_mse_DLG=mse_DLG[-1],
+#     label_DLG=label_DLG,gt_label=int(gt_label[0]))
+#   upload_metrics(run_id,"iDLG",loss_iDLG,mse_iDLG,
+#     final_loss_iDLG=loss_iDLG[-1],final_mse_iDLG=mse_iDLG[-1],
+#     label_iDLG=int(label_iDLG))</div>
+
+</div>
+{% endblock %}
