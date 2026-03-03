@@ -3,6 +3,11 @@
 {% block page_title %}{{ name }}{% endblock %}
 {% block content %}
 
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div></div>
+  <button class="del-btn" onclick="deleteRun('{{ run_id }}', '{{ name }}')" title="Delete this run">✕ Delete Run</button>
+</div>
+
 <div style="display:grid;grid-template-columns:1fr 300px;gap:24px;margin-bottom:28px">
   <div>
     <div class="sec">Run Configuration</div>

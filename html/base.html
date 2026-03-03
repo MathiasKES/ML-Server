@@ -147,6 +147,11 @@
     .dl-btn { padding: 4px 12px; font-size: 11px; background: var(--bg3); border: 1px solid var(--bord2); border-radius: var(--r); color: var(--acc2); font-family: var(--mono); }
     .dl-btn:hover { border-color: var(--acc2); text-decoration: none; }
 
+    /* ── Delete button ── */
+    .del-btn { padding: 4px 8px; font-size: 14px; background: none; border: 1px solid transparent; border-radius: var(--r); color: var(--text3); cursor: pointer; transition: all .15s; font-weight: 600; }
+    .del-btn:hover { color: #ff6b6b; border-color: #ff6b6b; background: rgba(255,107,107,.08); }
+    .del-btn:active { background: rgba(255,107,107,.12); }
+
     /* ── Theme toggle ── */
     .theme-toggle { padding: 6px 12px; font-size: 16px; background: none; border: 1px solid var(--bord2); border-radius: var(--r); color: var(--text2); cursor: pointer; transition: all .15s; }
     .theme-toggle:hover { color: var(--text); border-color: var(--text2); }
@@ -263,6 +268,27 @@
     const theme = isLight ? 'light' : 'dark';
     localStorage.setItem('theme', theme);
     btn.textContent = isLight ? '☀️' : '🌙';
+  }
+
+  function deleteRun(runId, runName, fromList = false) {
+    if (!confirm('Delete experiment run "' + runName + '"?\n\nThis will permanently delete all files and cannot be undone.')) {
+      return;
+    }
+    fetch('/api/runs/' + runId, { method: 'DELETE' })
+      .then(r => {
+        if (r.ok) {
+          if (fromList) {
+            window.location.reload();
+          } else {
+            window.location.href = '/jobs';
+          }
+        } else {
+          alert('Error deleting run');
+        }
+      })
+      .catch(e => {
+        alert('Error: ' + e);
+      });
   }
 </script>
 

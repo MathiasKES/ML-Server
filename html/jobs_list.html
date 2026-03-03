@@ -14,6 +14,7 @@
         <th>Final Loss</th>
         <th>Files</th>
         <th>Created</th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -38,6 +39,9 @@
       </td>
       <td style="font-size:12px;color:var(--text3);font-family:var(--mono)">
         {{ r.created_fmt }}
+      </td>
+      <td style="text-align:center">
+        <button class="del-btn" onclick="deleteRun('{{ r.run_id }}', '{{ r.name or r.run_id }}', true)" title="Delete">✕</button>
       </td>
     </tr>
     {% endfor %}

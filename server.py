@@ -26,6 +26,7 @@ import uuid
 import hashlib
 import secrets
 import base64
+import shutil
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -369,6 +370,17 @@ def api_get_run(run_id: str):
     if not m:
         abort(404)
     return jsonify(m)
+
+@app.route("/api/runs/<run_id>", methods=["DELETE"])
+@login_required
+def api_delete_run(run_id: str):
+    """Delete an experiment run and all its files."""
+    rd = RUNS_DIR / run_id
+    if not rd.exists():
+        abort(404)
+
+    shutil.rmtree(rd)
+    return jsonify({"status": "deleted"}), 200
 
 # ── API: create run ────────────────────────────────────────────────────────────
 
