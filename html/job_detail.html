@@ -10,46 +10,70 @@
       <tr><td>Run ID</td>       <td>{{ meta.run_id }}</td></tr>
       <tr><td>Name</td>         <td>{{ meta.name }}</td></tr>
       <tr><td>Dataset</td>      <td>{{ meta.dataset }}</td></tr>
-      <tr><td>Methods</td>      <td>{{ meta.methods|join(', ') }}</td></tr>
+
+      {# Prefer meta.methods if provided, else fall back to detected methods from metrics #}
+      <tr><td>Methods</td>
+        <td>
+          {% set mm = meta.methods if meta.methods else methods %}
+          {{ (mm or [])|join(', ') }}
+        </td>
+      </tr>
+
       <tr><td>Num dummy</td>    <td>{{ meta.num_dummy }}</td></tr>
       <tr><td>Iterations</td>   <td>{{ meta.iterations }}</td></tr>
       <tr><td>Learning rate</td><td>{{ meta.lr }}</td></tr>
       <tr><td>Num classes</td>  <td>{{ meta.num_classes }}</td></tr>
       <tr><td>GT label</td>     <td>{{ meta.gt_label }}</td></tr>
-      <tr><td>Label (iDLG)</td> <td>{{ meta.label_iDLG }}</td></tr>
-      <tr><td>Label (DLG)</td>  <td>{{ meta.label_DLG }}</td></tr>
       <tr><td>Created</td>      <td>{{ created_fmt }}</td></tr>
     </table>
   </div>
+
   <div>
     <div class="sec">Final Metrics</div>
-    <div class="card"><div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div><div class="stat-label">DLG loss</div>
-          <div class="stat-value" style="font-size:16px;color:var(--dlg)">{{ meta.final_loss_DLG or '&#x2014;' }}</div></div>
-        <div><div class="stat-label">iDLG loss</div>
-          <div class="stat-value" style="font-size:16px;color:var(--idlg)">{{ meta.final_loss_iDLG or '&#x2014;' }}</div></div>
-        <div><div class="stat-label">DLG MSE</div>
-          <div class="stat-value" style="font-size:16px;color:var(--dlg)">{{ meta.final_mse_DLG or '&#x2014;' }}</div></div>
-        <div><div class="stat-label">iDLG MSE</div>
-          <div class="stat-value" style="font-size:16px;color:var(--idlg)">{{ meta.final_mse_iDLG or '&#x2014;' }}</div></div>
+
+    <div class="card">
+      <div class="card-body">
+        {% if methods and metrics_scalars %}
+          <div style="display:flex;flex-direction:column;gap:14px">
+
+            {% for m in methods %}
+            {% set sc = (metrics_scalars[m] if metrics_scalars and metrics_scalars[m] is defined else {}) %}
+            <div style="padding:10px 12px;border:1px solid #1e2330;border-radius:14px;background:rgba(255,255,255,0.02)">
+              <div class="stat-label" style="margin-bottom:8px">{{ m }}</div>
+
+              {% if sc %}
+              <div style="display:grid;grid-template-columns:1fr;gap:6px">
+                {% for k, v in sc.items() %}
+                  <div style="display:flex;justify-content:space-between;gap:12px">
+                    <span style="color:var(--text3);font-size:12px">{{ k }}</span>
+                    <span style="color:var(--text1);font-size:12px;font-family:'Space Mono',monospace">
+                      {{ v if v is not none else '&#x2014;' }}
+                    </span>
+                  </div>
+                {% endfor %}
+              </div>
+              {% else %}
+                <div style="color:var(--text3);font-size:12px">No scalar metrics.</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+
+          </div>
+        {% else %}
+          <div style="color:var(--text3);font-size:12px">No final metrics uploaded.</div>
+        {% endif %}
       </div>
-    </div></div>
+    </div>
   </div>
 </div>
 
 <div class="sec">Metrics</div>
-{% if has_metrics %}
-<div class="metrics-grid">
-  <div class="card"><div class="card-header">Gradient Loss</div>
-    <div class="card-body"><canvas id="lossChart"></canvas></div></div>
-  <div class="card"><div class="card-header">MSE vs Ground Truth</div>
-    <div class="card-body"><canvas id="mseChart"></canvas></div></div>
-</div>
+{% if has_metrics and metric_names %}
+  <div id="metricsGrid" class="metrics-grid"></div>
 {% else %}
-<div class="empty" style="padding:32px">
-  <div class="empty-icon">&#x1F4C8;</div><p>No metrics uploaded yet.</p>
-</div>
+  <div class="empty" style="padding:32px">
+    <div class="empty-icon">&#x1F4C8;</div><p>No metrics uploaded yet.</p>
+  </div>
 {% endif %}
 
 <div class="tabs">
@@ -103,6 +127,7 @@
 </div>
 
 {% endblock %}
+
 {% block scripts %}
 <script>
 const COPTS = {
@@ -114,35 +139,77 @@ const COPTS = {
     y: { grid: { color: '#1e2330' }, ticks: { color: '#3d4560', font: { family: 'Space Mono', size: 10 } } }
   }
 };
-const dlgLoss  = {{ dlg_loss  | tojson }};
-const idlgLoss = {{ idlg_loss | tojson }};
-const dlgMse   = {{ dlg_mse   | tojson }};
-const idlgMse  = {{ idlg_mse  | tojson }};
-const mkL = a => a.map((_, i) => i);
-const mkDS = (label, data, color) => ({
-  label, data, borderColor: color,
-  backgroundColor: color.replace('rgb','rgba').replace(')',',0.08)'),
-  tension: 0.3, pointRadius: 2
-});
-if (dlgLoss.length || idlgLoss.length) {
-  const ds = [];
-  if (dlgLoss.length)  ds.push(mkDS('DLG',  dlgLoss,  'rgb(124,106,240)'));
-  if (idlgLoss.length) ds.push(mkDS('iDLG', idlgLoss, 'rgb(74,240,168)'));
-  new Chart(document.getElementById('lossChart'), {
-    type: 'line',
-    data: { labels: mkL(dlgLoss.length >= idlgLoss.length ? dlgLoss : idlgLoss), datasets: ds },
-    options: COPTS
-  });
+
+const metrics = {{ metrics_series | default({}) | tojson }};
+const methods = {{ methods | default([]) | tojson }};
+const metricNames = {{ metric_names | default([]) | tojson }};
+
+const mkLabels = (n) => Array.from({length:n}, (_, i) => i);
+
+function colorForMethod(i) {
+  // Small palette of decent colors, cycles if many methods.
+  const pal = [
+    'rgb(124,106,240)', 'rgb(74,240,168)', 'rgb(255,171,64)',
+    'rgb(64,180,255)', 'rgb(255,99,132)', 'rgb(192,132,252)',
+    'rgb(34,197,94)', 'rgb(250,204,21)'
+  ];
+  return pal[i % pal.length];
 }
-if (dlgMse.length || idlgMse.length) {
-  const ds = [];
-  if (dlgMse.length)  ds.push(mkDS('DLG',  dlgMse,  'rgb(124,106,240)'));
-  if (idlgMse.length) ds.push(mkDS('iDLG', idlgMse, 'rgb(74,240,168)'));
-  new Chart(document.getElementById('mseChart'), {
-    type: 'line',
-    data: { labels: mkL(dlgMse.length >= idlgMse.length ? dlgMse : idlgMse), datasets: ds },
-    options: COPTS
-  });
+
+function mkDS(label, data, color) {
+  return {
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color.replace('rgb','rgba').replace(')',',0.08)'),
+    tension: 0.3,
+    pointRadius: 2
+  };
 }
+
+(function renderAllCharts(){
+  const grid = document.getElementById('metricsGrid');
+  if (!grid || !metricNames.length) return;
+
+  metricNames.forEach((metricName) => {
+    // Collect series per method for this metric
+    const seriesByMethod = methods.map((m) => ({
+      method: m,
+      series: (metrics[m] && metrics[m][metricName]) ? metrics[m][metricName] : []
+    })).filter(x => x.series && x.series.length);
+
+    if (!seriesByMethod.length) return;
+
+    // Find max length for labels
+    let maxLen = 0;
+    seriesByMethod.forEach(x => { if (x.series.length > maxLen) maxLen = x.series.length; });
+
+    // Card
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.textContent = metricName;
+    card.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    const canvas = document.createElement('canvas');
+    body.appendChild(canvas);
+    card.appendChild(body);
+
+    grid.appendChild(card);
+
+    // Datasets
+    const ds = seriesByMethod.map((x, i) => mkDS(x.method, x.series, colorForMethod(i)));
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels: mkLabels(maxLen), datasets: ds },
+      options: COPTS
+    });
+  });
+})();
 </script>
 {% endblock %}
