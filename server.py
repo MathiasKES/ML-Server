@@ -1,5 +1,5 @@
 """
-Gradient Inversion Experiment Server
+Machine Learning Experiment Server
 Single-user, authenticated. Receives and displays experiment data.
 
 File layout:
@@ -17,7 +17,7 @@ Run:
     python server.py [--host 0.0.0.0] [--port 5000] [--debug]
 
 Credentials (defaults admin / password):
-    GRAD_USER=admin  GRAD_PASS=yourpassword  python server.py
+    ML_USER=admin  ML_PASS=yourpassword  python server.py
 """
 
 import os
@@ -45,8 +45,8 @@ RUNS_DIR    = DATA_DIR / "runs"
 SECRET_FILE = DATA_DIR / ".secret_key"
 HTML_DIR    = Path(__file__).parent / "html"
 
-USERNAME = os.environ.get("GRAD_USER", "admin")
-PASSWORD = os.environ.get("GRAD_PASS", "password")
+USERNAME = os.environ.get("ML_USER", "admin")
+PASSWORD = os.environ.get("ML_PASS", "password")
 
 ALLOWED_IMG  = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 ALLOWED_DATA = {".pkl", ".npy", ".npz", ".json", ".csv", ".txt", ".log"}
@@ -300,13 +300,6 @@ def job_detail(run_id: str):
         for series in md.values()
     )
 
-    # Backward-compatible variables for older templates that hardcode DLG/iDLG.
-    # Always provide lists (never Undefined) to avoid Jinja tojson crashes.
-    dlg_loss  = (metrics_series.get("DLG", {}) or {}).get("loss", []) or []
-    idlg_loss = (metrics_series.get("iDLG", {}) or {}).get("loss", []) or []
-    dlg_mse   = (metrics_series.get("DLG", {}) or {}).get("mse",  []) or []
-    idlg_mse  = (metrics_series.get("iDLG", {}) or {}).get("mse",  []) or []
-
     name = meta.get("name", run_id)
     return render(
         "job_detail.html",
@@ -327,12 +320,6 @@ def job_detail(run_id: str):
         metrics_scalars=metrics_scalars,
         methods=methods,
         metric_names=metric_names,
-
-        # Legacy template vars (safe defaults)
-        dlg_loss=dlg_loss,
-        idlg_loss=idlg_loss,
-        dlg_mse=dlg_mse,
-        idlg_mse=idlg_mse,
     )
 
 # ── File serving ───────────────────────────────────────────────────────────────
@@ -520,14 +507,6 @@ def api_upload_metrics(run_id: str):
         series   dict[str, list]     # full series replacement, e.g. {"loss":[...], "mse":[...]}
         append   dict[str, float]    # append single point per metric name, e.g. {"loss": 0.3}
         scalars  dict[str, Any]      # scalar metadata, e.g. {"final_loss":0.1, "label":5}
-
-    Backward compatible payload:
-        method
-        loss, mse, append_loss, append_mse
-        plus old top-level fields:
-            final_loss_DLG / final_loss_iDLG / final_mse_DLG / final_mse_iDLG
-            label_DLG / label_iDLG
-            gt_label
     """
     meta = get_meta(run_id)
     if not meta:
@@ -581,20 +560,6 @@ def api_upload_metrics(run_id: str):
     # Optional run-level field
     if "gt_label" in d:
         meta["gt_label"] = d["gt_label"]
-
-    # Back-compat: map old "*_DLG" / "*_iDLG" fields into meta["metrics"][method][scalar]
-    legacy_map = {
-        "final_loss_DLG":  ("DLG",  "final_loss"),
-        "final_loss_iDLG": ("iDLG", "final_loss"),
-        "final_mse_DLG":   ("DLG",  "final_mse"),
-        "final_mse_iDLG":  ("iDLG", "final_mse"),
-        "label_DLG":       ("DLG",  "label"),
-        "label_iDLG":      ("iDLG", "label"),
-    }
-    for old_key, (meth, new_key) in legacy_map.items():
-        if old_key in d:
-            meta["metrics"].setdefault(meth, {})
-            meta["metrics"][meth][new_key] = d[old_key]
 
     save_meta(run_id, meta)
     return jsonify({"status": "ok"}), 200
