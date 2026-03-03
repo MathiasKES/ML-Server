@@ -28,6 +28,21 @@
       --ui:     'Syne', sans-serif;
     }
 
+    :root.light-mode {
+      --bg:     #f5ede6;
+      --bg2:    #eae0d8;
+      --bg3:    #ddd2ca;
+      --border: #c9bfb7;
+      --bord2:  #b8aaa0;
+      --text:   #2c2420;
+      --text2:  #6b6258;
+      --text3:  #9d9088;
+      --accent: #2d9d7d;
+      --acc2:   #0078cc;
+      --dlg:    #6b50d4;
+      --idlg:   #2d9d7d;
+    }
+
     html, body { height: 100%; }
     body { font-family: var(--ui); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; }
 
@@ -72,6 +87,7 @@
 
     .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .top-bar { border-bottom: 1px solid var(--border); padding: 16px 32px; background: var(--bg2); }
+    .top-bar-header { display: flex; justify-content: space-between; align-items: center; }
     .top-bar h1 { font-size: 18px; font-weight: 700; }
     .top-bar .bc { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
     .page-body { padding: 32px; overflow-y: auto; flex: 1; }
@@ -137,6 +153,10 @@
     .dl-btn { padding: 4px 12px; font-size: 11px; background: var(--bg3); border: 1px solid var(--bord2); border-radius: var(--r); color: var(--acc2); font-family: var(--mono); }
     .dl-btn:hover { border-color: var(--acc2); text-decoration: none; }
 
+    /* ── Theme toggle ── */
+    .theme-toggle { padding: 6px 12px; font-size: 16px; background: none; border: 1px solid var(--bord2); border-radius: var(--r); color: var(--text2); cursor: pointer; transition: all .15s; }
+    .theme-toggle:hover { color: var(--text); border-color: var(--text2); }
+
     /* ── Tabs ── */
     .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
     .tab-btn { padding: 10px 20px; font-size: 13px; font-weight: 600; color: var(--text2); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; font-family: var(--ui); }
@@ -173,6 +193,15 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn .3s ease both; }
   </style>
+  <script>
+    // Apply saved theme immediately (before page renders to avoid flash)
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.documentElement.classList.add('light-mode');
+      }
+    })();
+  </script>
 </head>
 <body>
 <div class="layout">
@@ -205,9 +234,12 @@
   <!-- Main -->
   <div class="main-content">
     <div class="top-bar">
-      <div>
-        <h1>{% block page_title %}{% endblock %}</h1>
-        {% if breadcrumb %}<div class="bc">{{ breadcrumb }}</div>{% endif %}
+      <div class="top-bar-header">
+        <div>
+          <h1>{% block page_title %}{% endblock %}</h1>
+          {% if breadcrumb %}<div class="bc">{{ breadcrumb }}</div>{% endif %}
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
       </div>
     </div>
     <div class="page-body fade-in">
@@ -230,6 +262,14 @@
   }
   function openLb(src) { const lb = document.getElementById('lb'); lb.querySelector('img').src = src; lb.classList.add('open'); }
   function closeLb()   { document.getElementById('lb').classList.remove('open'); }
+  function toggleTheme() {
+    const html = document.documentElement;
+    const btn = document.getElementById('theme-btn');
+    const isLight = html.classList.toggle('light-mode');
+    const theme = isLight ? 'light' : 'dark';
+    localStorage.setItem('theme', theme);
+    btn.textContent = isLight ? '☀️' : '🌙';
+  }
 </script>
 
 {% block scripts %}{% endblock %}
