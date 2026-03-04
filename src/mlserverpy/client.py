@@ -5,13 +5,19 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union, TYPE_CHECKING
 
 import requests
 
 from .exceptions import AuthError, RequestFailedError
 from .utils import default_spool_dir, ensure_dir, append_jsonl, read_jsonl, atomic_write_text, now_iso
 
+import io
+import os
+
+if TYPE_CHECKING:
+    # Only imported for type-checking; matplotlib is an optional dependency
+    import matplotlib.figure
 
 class Client:
     """Client for ML-Server.
@@ -251,6 +257,45 @@ class Client:
             raise ValueError("No active run. Call client.run(...) first.")
         self._request_file(f"/api/runs/{rid}/images", path, run_id_for_spool=rid)
 
+    def post_image(self, run_id: str, path: "str | None" = None, *, figure: "matplotlib.figure.Figure | None" = None, filename: str = "figure.png", fmt: str = "png") -> None:
+        if path is not None and figure is not None:
+            raise ValueError("Supply either 'path' or 'figure', not both.")
+        if path is None and figure is None:
+            raise ValueError("Supply either 'path' or 'figure'.")
+
+        if path is not None:
+            # ── original behaviour ────────────────────────────────────────────
+            with open(path, "rb") as fh:
+                data = fh.read()
+            upload_filename = os.path.basename(path)
+        else:
+            # ── matplotlib figure → in-memory bytes ───────────────────────────
+            buf = io.BytesIO()
+            figure.savefig(buf, format=fmt)
+            buf.seek(0)
+            data = buf.read()
+            upload_filename = filename
+
+        response = self._session.post(
+            f"{self._host}/api/runs/{run_id}/images",
+            files={"file": (upload_filename, data, f"image/{fmt}")},
+        )
+        response.raise_for_status()
+
+        self._upload_image_bytes(run_id, upload_filename, data, fmt)
+
+    def _upload_image_bytes(self, run_id: str, filename: str, data: bytes, fmt: str) -> None:
+        """POST raw image bytes to the server.
+
+        This helper centralises the actual HTTP call so that post_image stays
+        readable regardless of how many input forms it supports.
+        """
+        response = self._session.post(
+            f"{self._host}/api/runs/{run_id}/images",
+            files={"file": (filename, data, f"image/{fmt}")},
+        )
+        response.raise_for_status()
+
     def post_data(self, *, path: str, run_id: str | None = None) -> None:
         rid = run_id or self.current_run_id
         if not rid:
@@ -324,3 +369,5 @@ class Client:
                     self.sync(max_events=200)
                 except Exception:
                     pass
+
+    
