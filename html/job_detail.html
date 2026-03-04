@@ -15,15 +15,12 @@
       <tr><td>Run ID</td>       <td>{{ meta.run_id }}</td></tr>
       <tr><td>Name</td>         <td>{{ meta.name }}</td></tr>
       <tr><td>Dataset</td>      <td>{{ meta.dataset }}</td></tr>
-
-      {# Prefer meta.methods if provided, else fall back to detected methods from metrics #}
       <tr><td>Methods</td>
         <td>
           {% set mm = meta.methods if meta.methods else methods %}
           {{ (mm or [])|join(', ') }}
         </td>
       </tr>
-
       <tr><td>Num dummy</td>    <td>{{ meta.num_dummy }}</td></tr>
       <tr><td>Iterations</td>   <td>{{ meta.iterations }}</td></tr>
       <tr><td>Learning rate</td><td>{{ meta.lr }}</td></tr>
@@ -35,17 +32,14 @@
 
   <div>
     <div class="sec">Final Metrics</div>
-
     <div class="card">
       <div class="card-body">
         {% if methods and metrics_scalars %}
           <div style="display:flex;flex-direction:column;gap:14px">
-
             {% for m in methods %}
             {% set sc = (metrics_scalars[m] if metrics_scalars and metrics_scalars[m] is defined else {}) %}
             <div style="padding:10px 12px;border:1px solid #1e2330;border-radius:14px;background:rgba(255,255,255,0.02)">
               <div class="stat-label" style="margin-bottom:8px">{{ m }}</div>
-
               {% if sc %}
               <div style="display:grid;grid-template-columns:1fr;gap:6px">
                 {% for k, v in sc.items() %}
@@ -62,7 +56,6 @@
               {% endif %}
             </div>
             {% endfor %}
-
           </div>
         {% else %}
           <div style="color:var(--text3);font-size:12px">No final metrics uploaded.</div>
@@ -145,94 +138,87 @@ const COPTS = {
   }
 };
 
-const metrics = {{ metrics_series | default({}) | tojson }};
-const methods = {{ methods | default([]) | tojson }};
-const metricNames = {{ metric_names | default([]) | tojson }};
+const PAL = [
+  'rgb(124,106,240)', 'rgb(74,240,168)', 'rgb(255,171,64)',
+  'rgb(64,180,255)',  'rgb(255,99,132)', 'rgb(192,132,252)',
+  'rgb(34,197,94)',   'rgb(250,204,21)'
+];
 
-const mkLabels = (n) => Array.from({length:n}, (_, i) => i);
+const metrics     = {{ metrics_series | default({}) | tojson }};
+const methods     = {{ methods        | default([]) | tojson }};
+const metricNames = {{ metric_names   | default([]) | tojson }};
 
-function colorForMethod(i) {
-  // Small palette of decent colors, cycles if many methods.
-  const pal = [
-    'rgb(124,106,240)', 'rgb(74,240,168)', 'rgb(255,171,64)',
-    'rgb(64,180,255)', 'rgb(255,99,132)', 'rgb(192,132,252)',
-    'rgb(34,197,94)', 'rgb(250,204,21)'
-  ];
-  return pal[i % pal.length];
-}
+// chart registry: metricName → Chart instance
+const charts = {};
 
 function mkDS(label, data, color) {
   return {
     label,
     data,
     borderColor: color,
-    backgroundColor: color.replace('rgb','rgba').replace(')',',0.08)'),
+    backgroundColor: color.replace('rgb', 'rgba').replace(')', ',0.08)'),
     tension: 0.3,
-    pointRadius: 2
+    pointRadius: 2,
   };
 }
 
-(function renderAllCharts(){
+(function renderAllCharts() {
   const grid = document.getElementById('metricsGrid');
   if (!grid || !metricNames.length) return;
 
   metricNames.forEach((metricName) => {
-    // Collect series per method for this metric
-    const seriesByMethod = methods.map((m) => ({
-      method: m,
-      series: (metrics[m] && metrics[m][metricName]) ? metrics[m][metricName] : []
-    })).filter(x => x.series && x.series.length);
+    const series = methods
+      .map((m, i) => ({ method: m, data: metrics[m]?.[metricName] || [], color: PAL[i % PAL.length] }))
+      .filter(x => x.data.length);
 
-    if (!seriesByMethod.length) return;
+    if (!series.length) return;
 
-    // Find max length for labels
-    let maxLen = 0;
-    seriesByMethod.forEach(x => { if (x.series.length > maxLen) maxLen = x.series.length; });
+    const maxLen = Math.max(...series.map(x => x.data.length));
+    const labels = Array.from({ length: maxLen }, (_, i) => i);
 
-    // Card
-    const card = document.createElement('div');
-    card.className = 'card';
-
-    const header = document.createElement('div');
-    header.className = 'card-header';
-    header.textContent = metricName;
-    card.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'card-body';
+    const card   = document.createElement('div'); card.className = 'card';
+    const header = document.createElement('div'); header.className = 'card-header'; header.textContent = metricName;
+    const body   = document.createElement('div'); body.className = 'card-body';
     const canvas = document.createElement('canvas');
-    body.appendChild(canvas);
-    card.appendChild(body);
 
+    body.appendChild(canvas);
+    card.appendChild(header);
+    card.appendChild(body);
     grid.appendChild(card);
 
-    // Datasets
-    const ds = seriesByMethod.map((x, i) => mkDS(x.method, x.series, colorForMethod(i)));
-
-    new Chart(canvas, {
+    charts[metricName] = new Chart(canvas, {
       type: 'line',
-      data: { labels: mkLabels(maxLen), datasets: ds },
-      options: COPTS
+      data: { labels, datasets: series.map(x => mkDS(x.method, x.data, x.color)) },
+      options: COPTS,
     });
   });
 })();
 
-function updateCharts(metrics) {
-  if (!metrics) return;
-  if (metrics.DLG && metrics.DLG.loss) {
-      lossChart.data.datasets[0].data = metrics.DLG.loss;
-  }
-  if (metrics.iDLG && metrics.iDLG.loss) {
-      lossChart.data.datasets[1].data = metrics.iDLG.loss;
-  }
-  lossChart.update();
-}
-
+// SSE — update charts live as new metric data arrives from the server
 const runId = "{{ run_id }}";
 const evt = new EventSource(`/api/runs/${runId}/stream`);
 evt.onmessage = (e) => {
   const meta = JSON.parse(e.data);
-  updateCharts(meta.metrics);
+  if (!meta.metrics) return;
+
+  metricNames.forEach((metricName) => {
+    const chart = charts[metricName];
+    if (!chart) return;
+
+    let changed = false;
+    methods.forEach((method, i) => {
+      const newData = meta.metrics[method]?.[metricName];
+      if (!newData) return;
+      chart.data.datasets[i].data = newData;
+      changed = true;
+    });
+
+    if (changed) {
+      const maxLen = Math.max(...chart.data.datasets.map(d => d.data.length));
+      chart.data.labels = Array.from({ length: maxLen }, (_, i) => i);
+      chart.update('none'); // 'none' skips animation for smooth live updates
+    }
+  });
 };
 </script>
 {% endblock %}
