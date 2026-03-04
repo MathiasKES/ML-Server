@@ -1,9 +1,6 @@
 class MLServerPyError(Exception):
     pass
 
-class NotInitializedError(MLServerPyError):
-    pass
-
 class AuthError(MLServerPyError):
     pass
 
