@@ -1,7 +1,8 @@
 # mlserverpy
 
+```bash
 git submodule add -b mlserverpy git@github.com:MathiasKES/ML-Server.git
-
+```
 
 Small Python SDK for ML-Server.
 
