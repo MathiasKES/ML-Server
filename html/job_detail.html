@@ -216,5 +216,23 @@ function mkDS(label, data, color) {
     });
   });
 })();
+
+function updateCharts(metrics) {
+  if (!metrics) return;
+  if (metrics.DLG && metrics.DLG.loss) {
+      lossChart.data.datasets[0].data = metrics.DLG.loss;
+  }
+  if (metrics.iDLG && metrics.iDLG.loss) {
+      lossChart.data.datasets[1].data = metrics.iDLG.loss;
+  }
+  lossChart.update();
+}
+
+const runId = "{{ run_id }}";
+const evt = new EventSource(`/api/runs/${runId}/stream`);
+evt.onmessage = (e) => {
+  const meta = JSON.parse(e.data);
+  updateCharts(meta.metrics);
+};
 </script>
 {% endblock %}

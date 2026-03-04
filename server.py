@@ -33,11 +33,12 @@ from pathlib import Path
 from typing import Any
 
 from flask import (
-    Flask, request, jsonify, session,
-    redirect, url_for, send_from_directory, abort,
+    Flask, Response, request, jsonify, session,
+    redirect, url_for, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
 from jinja2 import FileSystemLoader, Environment
+import time
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -575,6 +576,26 @@ def api_upload_metrics(run_id: str):
 
     save_meta(run_id, meta)
     return jsonify({"status": "ok"}), 200
+
+# ── API Stream ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/runs/<run_id>/stream")
+@login_required
+def api_stream_run(run_id: str):
+    def event_stream():
+        last_mtime = None
+        while True:
+            meta_path = RUNS_DIR / run_id / "meta.json"
+            if not meta_path.exists():
+                yield "event: error\ndata: {}\n\n"
+                break
+            mtime = meta_path.stat().st_mtime
+            if last_mtime is None or mtime != last_mtime:
+                last_mtime = mtime
+                meta = get_meta(run_id)
+                yield f"data: {json.dumps(meta)}\n\n"
+            time.sleep(2)
+    return Response(event_stream(), mimetype="text/event-stream")
 
 # ── API Docs ───────────────────────────────────────────────────────────────────
 

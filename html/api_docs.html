@@ -12,7 +12,7 @@
 <div class="sec">Authentication</div>
 <div class="card" style="margin-bottom:12px"><div class="card-body">
   <span class="ep-method m-post">POST</span><span class="ep-path">/api/token</span>
-  <div class="ep-desc">Body: <code style="font-family:var(--mono)">{"username":"...","password":"..."}</code> &#x2192; bearer token.</div>
+  <div class="ep-desc">Body: <code style="font-family:var(--mono)">{"username":"...","password":"..."}</code> → bearer token.</div>
 </div></div>
 
 <div class="sec" style="margin-top:28px">Runs</div>
@@ -36,29 +36,34 @@
 
 <div class="sec" style="margin-top:28px">Upload</div>
 
+<!-- Metrics upload -->
 <div class="card" style="margin-bottom:12px"><div class="card-body">
   <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/metrics</span>
-  <div class="ep-desc">Upload loss/MSE arrays or stream per-iteration values.</div>
-  <div class="code-block"># Full arrays at end of run
-{"method":"iDLG","loss":[0.5,0.3,...],"mse":[0.2,0.1,...],
- "final_loss_iDLG":0.000042,"final_mse_iDLG":0.00012,"label_iDLG":7,"gt_label":7}
+  <div class="ep-desc">Upload metric series or stream per‑iteration values.  The recommended payload uses <code>series</code>, <code>append</code> and <code>scalars</code> keys.  Legacy keys (<code>loss</code>, <code>mse</code>, <code>append_loss</code>, <code>append_mse</code>) are still accepted for backwards compatibility.</div>
+  <div class="code-block"># Full series at end of run
+{"method":"iDLG","series":{"loss":[0.5,0.3,...],"mse":[0.2,0.1,...]},
+ "scalars":{"final_loss":0.000042,"final_mse":0.00012,"label":7,"gt_label":7}}
 # Stream per iteration
-{"method":"DLG","append_loss":0.3421,"append_mse":0.1204}</div>
+{"method":"DLG","append":{"loss":0.3421,"mse":0.1204}}
+</div>
 </div></div>
 
+<!-- Images upload -->
 <div class="card" style="margin-bottom:12px"><div class="card-body">
   <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/images</span>
-  <div class="ep-desc">Multipart upload (field: <code style="font-family:var(--mono)">file</code>) or base64 JSON. Accepts .png .jpg .gif .webp</div>
+  <div class="ep-desc">Multipart upload (<code>file</code> field) or base64 JSON. Accepts .png, .jpg, .jpeg, .gif and .webp files.</div>
 </div></div>
 
+<!-- Data upload -->
 <div class="card" style="margin-bottom:12px"><div class="card-body">
   <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/data</span>
-  <div class="ep-desc">Multipart file upload. Accepts .pkl .npy .npz .json .csv .txt</div>
+  <div class="ep-desc">Multipart file upload. Accepts .pkl, .npy, .npz, .json, .csv, .txt and .log files.</div>
 </div></div>
 
+<!-- Logs upload -->
 <div class="card" style="margin-bottom:12px"><div class="card-body">
   <span class="ep-method m-post">POST</span><span class="ep-path">/api/runs/:run_id/logs</span>
-  <div class="ep-desc">Append to log. Set <code style="font-family:var(--mono)">"append":false</code> to overwrite.</div>
+  <div class="ep-desc">Append to a log file. Set <code>"append": false</code> to overwrite.</div>
   <div class="code-block">{"filename":"run.log","content":"iter 50 loss=0.34","append":true}</div>
 </div></div>
 
@@ -73,41 +78,40 @@ s.headers["Authorization"] = f"Bearer {tok}"
 
 def create_run(name, dataset, methods, **kw):
     return s.post(f"{SERVER}/api/runs",
-                  json={"name":name,"dataset":dataset,"methods":methods,**kw}).json()["run_id"]
+                  json={"name": name, "dataset": dataset, "methods": methods, **kw}).json()["run_id"]
 
-def upload_metrics(run_id, method, loss, mse, **kw):
+def upload_metrics_full(run_id, method, loss, mse, **scalars):
+    # Upload full arrays and optional scalar metadata
     s.post(f"{SERVER}/api/runs/{run_id}/metrics",
-           json={"method":method,"loss":loss,"mse":mse,**kw})
+          json={"method": method,
+                "series": {"loss": loss, "mse": mse},
+                "scalars": scalars})
+
+def upload_metric_point(run_id, method, loss, mse):
+    # Stream a single metric point
+    s.post(f"{SERVER}/api/runs/{run_id}/metrics",
+          json={"method": method,
+                "append": {"loss": loss, "mse": mse}})
 
 def upload_image(run_id, path):
-    with open(path,"rb") as f:
-        s.post(f"{SERVER}/api/runs/{run_id}/images",
-               files={"file":(os.path.basename(path),f,"image/png")})
+    with open(path, "rb") as f:
+        s.post(f"{SERVER}/api/runs/{run_id}/images", files={"file": (os.path.basename(path), f, "image/png")})
 
 def upload_data(run_id, path):
-    with open(path,"rb") as f:
-        s.post(f"{SERVER}/api/runs/{run_id}/data",
-               files={"file":(os.path.basename(path),f)})
+    with open(path, "rb") as f:
+        s.post(f"{SERVER}/api/runs/{run_id}/data", files={"file": (os.path.basename(path), f)})
 
-def log(run_id, msg):
+def log(run_id, msg, filename="run.log"):
     s.post(f"{SERVER}/api/runs/{run_id}/logs",
-           json={"filename":"run.log","content":msg,"append":True})
+          json={"filename": filename, "content": msg, "append": True})
 
-# Integration with iDLG.py:
-# run_id = create_run("cifar100-run-1","cifar100",["DLG","iDLG"],
-#                     num_dummy=1,iterations=300,lr=1.0,num_classes=100)
-# Inside iteration loop:
-#   log(run_id, f"{iters} {method} loss={current_loss:.8f}")
-#   s.post(f"{SERVER}/api/runs/{run_id}/metrics",
-#          json={"method":method,"append_loss":current_loss,"append_mse":mses[-1]})
-# After saving plot: upload_image(run_id, "path/to/plot.png")
-# End of run:
-#   upload_metrics(run_id,"DLG",loss_DLG,mse_DLG,
-#     final_loss_DLG=loss_DLG[-1],final_mse_DLG=mse_DLG[-1],
-#     label_DLG=label_DLG,gt_label=int(gt_label[0]))
-#   upload_metrics(run_id,"iDLG",loss_iDLG,mse_iDLG,
-#     final_loss_iDLG=loss_iDLG[-1],final_mse_iDLG=mse_iDLG[-1],
-#     label_iDLG=int(label_iDLG))</div>
+# Example usage:
+# run_id = create_run("cifar100-run-1", "cifar100", ["DLG", "iDLG"], num_dummy=1, iterations=300, lr=1.0, num_classes=100)
+# upload_metric_point(run_id, "DLG", loss=0.3421, mse=0.1204)
+# log(run_id, f"iteration 1 loss={0.3421}")
+# upload_image(run_id, "path/to/plot.png")
+# upload_metrics_full(run_id, "DLG", loss_array, mse_array, final_loss=loss_array[-1], final_mse=mse_array[-1], label=label, gt_label=int(gt_label))
+</div>
 
 </div>
 {% endblock %}
