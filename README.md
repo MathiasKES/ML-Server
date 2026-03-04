@@ -9,32 +9,31 @@ Small Python SDK for ML-Server.
 ## Quickstart
 
 ```python
-import mlserverpy as ml
+import mlserverpy
 
-ml.init(
-    host="http://127.0.0.1:5001",
+client = mlserverpy.Client(
+    host="http://localhost:5001",
     username="admin",
     password="password",
-    flush_interval=2.0,
     offline_mode="queue",
+    flush_interval=2.0,
 )
 
-run_id = ml.run(
-    name="test-run",
-    dataset="cifar100",
-    methods=["DLG", "iDLG"],
-    iterations=300,
-    lr=0.5,
-    num_classes=100,
-)
+run_id = client.run(name="demo", dataset="cifar100", methods=["DLG","iDLG"], iterations=300)
 
 for step in range(100):
-    ml.log_metric(method="DLG", metric="loss", value=10.0/(step+1), step=step)
-    ml.log_metric(method="DLG", metric="mse", value=1.0/(step+1), step=step)
+    client.log_metric(method="DLG", metric="loss", value=10.0/(step+1), step=step)
+    client.log_metric(method="DLG", metric="mse", value=1.0/(step+1), step=step)
 
-ml.post(kind="log", text="Training finished")
-ml.flush()
+client.flush()
 ```
+
+## Offline mode
+
+- `offline_mode="queue"`: store failed requests under `~/.cache/mlserverpy/spool/<run_id>` and replay with `client.sync()`
+- `offline_mode="drop"`: silently drop failed requests
+- `offline_mode="raise"`: raise on failures immediately
+
 
 ## Notes
 * Metrics are buffered locally and sent periodically.
