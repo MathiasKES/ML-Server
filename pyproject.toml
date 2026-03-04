@@ -1,14 +1,18 @@
 [project]
 name = "mlserverpy"
 version = "0.1.0"
+authors = [
+    { name="Mathias Sørensen"},
+]
+description = "Python API Package for machine learning experiments data server"
+readme = "README.md"
+requires-python = ">=3.9"
 dependencies = ["requests>=2.31.0"]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.urls]
+Homepage = "https://github.com/MathiasKES/ML-Server/tree/mlserverpy"
+Issues = "https://github.com/MathiasKES/ML-Server/issues"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
