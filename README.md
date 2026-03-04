@@ -1,7 +1,7 @@
 # mlserverpy
 
-```bash
-git submodule add -b mlserverpy git@github.com:MathiasKES/ML-Server.git
+```python
+pip install -i https://test.pypi.org/simple/ mlserverpy
 ```
 
 Small Python SDK for ML-Server.
