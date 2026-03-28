@@ -637,4 +637,9 @@ if __name__ == "__main__":
   Override credentials via env vars:
     GRAD_USER=admin  GRAD_PASS=yourpassword
 """)
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    if args.debug:
+        app.run(host=args.host, port=args.port, debug=True)
+    else:
+        from waitress import serve
+        print("Starting in production mode via Waitress...")
+        serve(app, host=args.host, port=args.port)
